@@ -14,7 +14,7 @@ export const useGameStore = defineStore('game', () => {
   const timeLeft = ref<number>(60);
   const round = ref<number>(0);
   const maxRounds = ref<number>(3);
-  
+
   // Mock player data
   const mockPlayers: Player[] = [
     { id: '1', name: 'Player 1', score: 0, avatar: '👨‍🎨' },
@@ -25,9 +25,9 @@ export const useGameStore = defineStore('game', () => {
 
   // Mock words for drawing
   const allWords = [
-    'apple', 'banana', 'car', 'dog', 'elephant', 
-    'fish', 'guitar', 'house', 'ice cream', 'jet', 
-    'kangaroo', 'lamp', 'mountain', 'notebook', 'ocean', 
+    'apple', 'banana', 'car', 'dog', 'elephant',
+    'fish', 'guitar', 'house', 'ice cream', 'jet',
+    'kangaroo', 'lamp', 'mountain', 'notebook', 'ocean',
     'pizza', 'queen', 'rainbow', 'sun', 'train'
   ];
 
@@ -40,11 +40,11 @@ export const useGameStore = defineStore('game', () => {
     userId.value = '1'; // Assume current user is player 1
     players.value = mockPlayers;
     messages.value = [
-      { 
-        id: '1', 
-        userId: 'system', 
-        text: 'Welcome to Draw and Guess! Click "Start Game" to begin.', 
-        type: 'system', 
+      {
+        id: '1',
+        userId: 'system',
+        text: 'Welcome to Draw and Guess! Click "Start Game" to begin.',
+        type: 'system',
         timestamp: new Date().toISOString(),
         isCorrect: false
       }
@@ -55,11 +55,11 @@ export const useGameStore = defineStore('game', () => {
     if (gameState.value !== 'waiting' && gameState.value !== 'finished') {
       return;
     }
-    
+
     round.value = 1;
     resetPlayerScores();
     startNewRound();
-    
+
     messages.value.push({
       id: Date.now().toString(),
       userId: 'system',
@@ -73,27 +73,27 @@ export const useGameStore = defineStore('game', () => {
   function startNewRound() {
     // Determine next player
     const currentPlayerIndex = players.value.findIndex(p => p.id === currentPlayerId.value);
-    const nextPlayerIndex = currentPlayerIndex >= 0 && currentPlayerIndex < players.value.length - 1 
-      ? currentPlayerIndex + 1 
+    const nextPlayerIndex = currentPlayerIndex >= 0 && currentPlayerIndex < players.value.length - 1
+      ? currentPlayerIndex + 1
       : 0;
-    
+
     currentPlayerId.value = players.value[nextPlayerIndex].id;
-    
+
     // Select random words for options
     const shuffled = [...allWords].sort(() => 0.5 - Math.random());
     wordOptions.value = shuffled.slice(0, 3);
-    
+
     // Auto-select a word for now (in a real app, the drawer would choose)
     currentWord.value = wordOptions.value[0];
-    
+
     gameState.value = 'playing';
     timeLeft.value = roundTime.value;
-    
+
     // Start timer
     if (timerInterval) {
       clearInterval(timerInterval);
     }
-    
+
     timerInterval = window.setInterval(() => {
       if (timeLeft.value > 0) {
         timeLeft.value--;
@@ -101,7 +101,7 @@ export const useGameStore = defineStore('game', () => {
         endRound();
       }
     }, 1000);
-    
+
     messages.value.push({
       id: Date.now().toString(),
       userId: 'system',
@@ -117,9 +117,9 @@ export const useGameStore = defineStore('game', () => {
       clearInterval(timerInterval);
       timerInterval = null;
     }
-    
+
     gameState.value = 'roundEnd';
-    
+
     messages.value.push({
       id: Date.now().toString(),
       userId: 'system',
@@ -128,15 +128,15 @@ export const useGameStore = defineStore('game', () => {
       timestamp: new Date().toISOString(),
       isCorrect: false
     });
-    
+
     round.value++;
-    
+
     // Check if the game is over
     if (round.value > maxRounds.value) {
       endGame();
       return;
     }
-    
+
     // Start new round after delay
     setTimeout(() => {
       startNewRound();
@@ -145,10 +145,10 @@ export const useGameStore = defineStore('game', () => {
 
   function endGame() {
     gameState.value = 'finished';
-    
+
     // Find winner
     const winner = [...players.value].sort((a, b) => b.score - a.score)[0];
-    
+
     messages.value.push({
       id: Date.now().toString(),
       userId: 'system',
@@ -171,43 +171,65 @@ export const useGameStore = defineStore('game', () => {
 
   function sendMessage(message: Message) {
     messages.value.push(message);
-    
+
     // Check if the guess is correct
     if (message.isCorrect && gameState.value === 'playing' && message.userId !== currentPlayerId.value) {
       // Award points
       const player = getPlayerById(message.userId);
       if (player) {
         player.score += 10;
-        
-        messages.value.push({
-          id: Date.now().toString(),
-          userId: 'system',
-          text: `${player.name} guessed the word correctly! +10 points`,
-          type: 'system',
-          timestamp: new Date().toISOString(),
-          isCorrect: false
-        });
-        
+
         // Also give points to the drawer
         const drawer = getPlayerById(currentPlayerId.value);
         if (drawer) {
           drawer.score += 5;
         }
-        
-        // End round early
-        endRound();
+
+        // End round early but without the default system message
+        endRoundWithCorrectGuess(player.name);
       }
     }
+  }
+
+  function endRoundWithCorrectGuess(playerName: string) {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+
+    gameState.value = 'roundEnd';
+
+    messages.value.push({
+      id: Date.now().toString(),
+      userId: 'system',
+      text: `${playerName} guessed the word correctly! +10 points. The word was "${currentWord.value}"`,
+      type: 'system',
+      timestamp: new Date().toISOString(),
+      isCorrect: false
+    });
+
+    round.value++;
+
+    // Check if the game is over
+    if (round.value > maxRounds.value) {
+      endGame();
+      return;
+    }
+
+    // Start new round after delay
+    setTimeout(() => {
+      startNewRound();
+    }, 3000);
   }
 
   function isCorrectGuess(text: string): boolean {
     if (gameState.value !== 'playing' || currentPlayerId.value === userId.value) {
       return false;
     }
-    
+
     const normalizedGuess = text.trim().toLowerCase();
     const normalizedWord = currentWord.value.trim().toLowerCase();
-    
+
     return normalizedGuess === normalizedWord;
   }
 
@@ -222,10 +244,11 @@ export const useGameStore = defineStore('game', () => {
     round,
     maxRounds,
     timeLeft,
-    
+
     initialize,
     startGame,
     sendMessage,
-    isCorrectGuess
+    isCorrectGuess,
+    endRound
   };
 });
